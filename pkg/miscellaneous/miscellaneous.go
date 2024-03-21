@@ -24,10 +24,10 @@ import (
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/embed"
-	"go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
-	"go.etcd.io/etcd/etcdserver/etcdserverpb"
-	"go.etcd.io/etcd/pkg/types"
+	"go.etcd.io/etcd/api/v3/etcdserverpb"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
+	"go.etcd.io/etcd/client/pkg/v3/types"
+	"go.etcd.io/etcd/server/v3/embed"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -168,10 +168,10 @@ func StartEmbeddedEtcd(logger *logrus.Entry, ro *brtypes.RestoreOptions) (*embed
 	if err != nil {
 		return nil, err
 	}
-	cfg.LPUrls = []url.URL{*lpurl}
-	cfg.LCUrls = []url.URL{*lcurl}
-	cfg.APUrls = []url.URL{*apurl}
-	cfg.ACUrls = []url.URL{*acurl}
+	cfg.ListenPeerUrls = []url.URL{*lpurl}
+	cfg.ListenClientUrls = []url.URL{*lcurl}
+	cfg.AdvertisePeerUrls = []url.URL{*apurl}
+	cfg.AdvertiseClientUrls = []url.URL{*acurl}
 	cfg.InitialCluster = cfg.InitialClusterFromName(cfg.Name)
 	cfg.QuotaBackendBytes = ro.Config.EmbeddedEtcdQuotaBytes
 	cfg.MaxRequestBytes = ro.Config.MaxRequestBytes

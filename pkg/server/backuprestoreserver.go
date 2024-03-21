@@ -26,11 +26,11 @@ import (
 	"github.com/gardener/etcd-backup-restore/pkg/snapshot/snapshotter"
 	"github.com/gardener/etcd-backup-restore/pkg/snapstore"
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
+	"go.etcd.io/etcd/client/pkg/v3/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	cron "github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/pkg/types"
 	"k8s.io/client-go/util/retry"
 )
 

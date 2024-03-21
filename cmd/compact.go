@@ -13,7 +13,7 @@ import (
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"go.etcd.io/etcd/mvcc"
+	"go.etcd.io/etcd/server/v3/mvcc"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 

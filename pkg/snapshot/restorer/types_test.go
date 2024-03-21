@@ -13,7 +13,7 @@ import (
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.etcd.io/etcd/pkg/types"
+	"go.etcd.io/etcd/client/pkg/v3/types"
 )
 
 var _ = Describe("restorer types", func() {

@@ -27,22 +27,23 @@ import (
 	"github.com/gardener/etcd-backup-restore/pkg/miscellaneous"
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/embed"
-	"go.etcd.io/etcd/etcdserver"
-	"go.etcd.io/etcd/etcdserver/api/membership"
-	"go.etcd.io/etcd/etcdserver/api/snap"
-	store "go.etcd.io/etcd/etcdserver/api/v2store"
-	"go.etcd.io/etcd/etcdserver/etcdserverpb"
-	"go.etcd.io/etcd/lease"
-	"go.etcd.io/etcd/mvcc"
-	"go.etcd.io/etcd/mvcc/backend"
-	"go.etcd.io/etcd/mvcc/mvccpb"
-	"go.etcd.io/etcd/pkg/traceutil"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
-	"go.etcd.io/etcd/wal"
-	"go.etcd.io/etcd/wal/walpb"
+	"go.etcd.io/etcd/api/v3/etcdserverpb"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/pkg/v3/traceutil"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
+	"go.etcd.io/etcd/server/v3/config"
+	"go.etcd.io/etcd/server/v3/embed"
+	"go.etcd.io/etcd/server/v3/etcdserver"
+	"go.etcd.io/etcd/server/v3/etcdserver/api/membership"
+	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
+	store "go.etcd.io/etcd/server/v3/etcdserver/api/v2store"
+	"go.etcd.io/etcd/server/v3/lease"
+	"go.etcd.io/etcd/server/v3/mvcc"
+	"go.etcd.io/etcd/server/v3/mvcc/backend"
+	"go.etcd.io/etcd/server/v3/wal"
+	"go.etcd.io/etcd/server/v3/wal/walpb"
 	"go.uber.org/zap"
 )
 
@@ -153,7 +154,7 @@ func (r *Restorer) restoreFromBaseSnapshot(ro brtypes.RestoreOptions) error {
 		return nil
 	}
 	r.logger.Infof("Restoring from base snapshot: %s", path.Join(ro.BaseSnapshot.SnapDir, ro.BaseSnapshot.SnapName))
-	cfg := etcdserver.ServerConfig{
+	cfg := config.ServerConfig{
 		InitialClusterToken: ro.Config.InitialClusterToken,
 		InitialPeerURLsMap:  ro.ClusterURLs,
 		PeerURLs:            ro.PeerURLs,
@@ -179,6 +180,82 @@ func (r *Restorer) restoreFromBaseSnapshot(ro brtypes.RestoreOptions) error {
 		return err
 	}
 	return makeWALAndSnap(r.zapLogger, walDir, snapDir, cl, ro.Config.Name)
+}
+
+var (
+	keyBucketName   = []byte("key")
+	metaBucketName  = []byte("meta")
+	leaseBucketName = []byte("lease")
+	alarmBucketName = []byte("alarm")
+
+	clusterBucketName = []byte("cluster")
+
+	membersBucketName        = []byte("members")
+	membersRemovedBucketName = []byte("members_removed")
+
+	authBucketName      = []byte("auth")
+	authUsersBucketName = []byte("authUsers")
+	authRolesBucketName = []byte("authRoles")
+
+	scheduleBucketName            = []byte("schedule")
+	schedulePlansBucketName       = []byte("schedulePlans")
+	scheduleNameSpacesBucketName  = []byte("scheduleNameSpaces")
+	scheduleJobsBucketName        = []byte("scheduleJobs")
+	scheduleEvaluationsBucketName = []byte("scheduleEvaluations")
+	scheduleAllocationsBucketName = []byte("scheduleAllocations")
+	nodeBucketName                = []byte("nodes")
+	scheduleLaunchesBucketName    = []byte("scheduleLaunches")
+
+	testBucketName = []byte("test")
+)
+
+var (
+	Key     = backend.Bucket(bucket{id: 1, name: keyBucketName, safeRangeBucket: true})
+	Meta    = backend.Bucket(bucket{id: 2, name: metaBucketName, safeRangeBucket: false})
+	Lease   = backend.Bucket(bucket{id: 3, name: leaseBucketName, safeRangeBucket: false})
+	Alarm   = backend.Bucket(bucket{id: 4, name: alarmBucketName, safeRangeBucket: false})
+	Cluster = backend.Bucket(bucket{id: 5, name: clusterBucketName, safeRangeBucket: false})
+
+	Members        = backend.Bucket(bucket{id: 10, name: membersBucketName, safeRangeBucket: false})
+	MembersRemoved = backend.Bucket(bucket{id: 11, name: membersRemovedBucketName, safeRangeBucket: false})
+
+	Auth      = backend.Bucket(bucket{id: 20, name: authBucketName, safeRangeBucket: false})
+	AuthUsers = backend.Bucket(bucket{id: 21, name: authUsersBucketName, safeRangeBucket: false})
+	AuthRoles = backend.Bucket(bucket{id: 22, name: authRolesBucketName, safeRangeBucket: false})
+
+	Schedule            = backend.Bucket(bucket{id: 30, name: scheduleBucketName, safeRangeBucket: false})
+	SchedulePlans       = backend.Bucket(bucket{id: 31, name: schedulePlansBucketName, safeRangeBucket: false})
+	ScheduleJobs        = backend.Bucket(bucket{id: 32, name: scheduleJobsBucketName, safeRangeBucket: false})
+	ScheduleEvaluations = backend.Bucket(bucket{id: 33, name: scheduleEvaluationsBucketName, safeRangeBucket: false})
+	ScheduleAllocations = backend.Bucket(bucket{id: 34, name: scheduleAllocationsBucketName, safeRangeBucket: false})
+	Node                = backend.Bucket(bucket{id: 35, name: nodeBucketName, safeRangeBucket: false})
+	ScheduleLaunches    = backend.Bucket(bucket{id: 36, name: scheduleLaunchesBucketName, safeRangeBucket: false})
+	ScheduleNameSpaces  = backend.Bucket(bucket{id: 37, name: scheduleNameSpacesBucketName, safeRangeBucket: false})
+	Test                = backend.Bucket(bucket{id: 100, name: testBucketName, safeRangeBucket: false})
+)
+
+type bucket struct {
+	id              backend.BucketID
+	name            []byte
+	safeRangeBucket bool
+}
+
+func (b bucket) ID() backend.BucketID    { return b.id }
+func (b bucket) Name() []byte            { return b.name }
+func (b bucket) String() string          { return string(b.Name()) }
+func (b bucket) IsSafeRangeBucket() bool { return b.safeRangeBucket }
+
+var (
+	MetaConsistentIndexKeyName = []byte("consistent_index")
+	MetaTermKeyName            = []byte("term")
+)
+
+// DefaultIgnores defines buckets & keys to ignore in hash checking.
+func DefaultIgnores(bucket, key []byte) bool {
+	// consistent index & term might be changed due to v2 internal sync, which
+	// is not controllable by the user.
+	return bytes.Compare(bucket, Meta.Name()) == 0 &&
+		(bytes.Compare(key, MetaTermKeyName) == 0 || bytes.Compare(key, MetaConsistentIndexKeyName) == 0)
 }
 
 // makeDB copies the database snapshot to the snapshot directory.
@@ -279,7 +356,7 @@ func (r *Restorer) makeDB(snapDir string, snap *brtypes.Snapshot, commit int, sk
 	be := backend.NewDefaultBackend(dbPath)
 	// a lessor that never times out leases
 	lessor := lease.NewLessor(r.zapLogger, be, lease.LessorConfig{MinLeaseTTL: math.MaxInt64})
-	s := mvcc.NewStore(r.zapLogger, be, lessor, (*brtypes.InitIndex)(&commit), mvcc.StoreConfig{})
+	s := mvcc.NewStore(r.zapLogger, be, lessor, mvcc.StoreConfig{})
 	trace := traceutil.New("write", r.zapLogger)
 
 	txn := s.Write(trace)
@@ -290,12 +367,12 @@ func (r *Restorer) makeDB(snapDir string, snap *brtypes.Snapshot, commit int, sk
 	}
 
 	// delete stored members from old cluster since using new members
-	if err := btx.UnsafeForEach([]byte("members"), del); err != nil {
+	if err := btx.UnsafeForEach(Members, del); err != nil {
 		return err
 	}
 
 	// todo: add back new members when we start to deprecate old snap file.
-	if err := btx.UnsafeForEach([]byte("members_removed"), del); err != nil {
+	if err := btx.UnsafeForEach(MembersRemoved, del); err != nil {
 		return err
 	}
 
@@ -323,7 +400,7 @@ func makeWALAndSnap(logger *zap.Logger, walDir, snapDir string, cl *membership.R
 	st := store.New(etcdserver.StoreClusterPrefix, etcdserver.StoreKeysPrefix)
 	cl.SetStore(st)
 	for _, m := range cl.Members() {
-		cl.AddMember(m)
+		cl.AddMember(m, membership.ApplyBoth)
 	}
 
 	m := cl.MemberByName(restoreName)

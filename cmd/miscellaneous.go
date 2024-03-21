@@ -12,7 +12,7 @@ import (
 	"github.com/gardener/etcd-backup-restore/pkg/snapstore"
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	ver "github.com/gardener/etcd-backup-restore/pkg/version"
-	"go.etcd.io/etcd/pkg/types"
+	"go.etcd.io/etcd/client/pkg/v3/types"
 )
 
 func printVersionInfo() {

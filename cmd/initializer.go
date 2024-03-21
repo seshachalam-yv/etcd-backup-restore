@@ -12,7 +12,7 @@ import (
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"go.etcd.io/etcd/pkg/types"
+	"go.etcd.io/etcd/client/pkg/v3/types"
 )
 
 // NewInitializeCommand returns the command to initialize etcd by validating the data

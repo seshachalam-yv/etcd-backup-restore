@@ -11,7 +11,7 @@ import (
 
 	client "github.com/gardener/etcd-backup-restore/pkg/etcdutil/client"
 	gomock "github.com/golang/mock/gomock"
-	clientv3 "go.etcd.io/etcd/clientv3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // MockFactory is a mock of Factory interface.

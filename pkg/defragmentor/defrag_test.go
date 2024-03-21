@@ -16,8 +16,8 @@ import (
 	"github.com/gardener/etcd-backup-restore/test/utils"
 	"github.com/golang/mock/gomock"
 	cron "github.com/robfig/cron/v3"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/etcdserver/etcdserverpb"
+	"go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/api/v3/etcdserverpb"
 
 	. "github.com/gardener/etcd-backup-restore/pkg/defragmentor"
 	. "github.com/onsi/ginkgo/v2"

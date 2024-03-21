@@ -23,8 +23,8 @@ import (
 	"github.com/gardener/etcd-backup-restore/test/utils"
 	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/pkg/types"
+	"go.etcd.io/etcd/client/pkg/v3/types"
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	. "github.com/gardener/etcd-backup-restore/pkg/snapshot/restorer"
 	. "github.com/onsi/ginkgo/v2"

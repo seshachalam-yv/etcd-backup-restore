@@ -16,7 +16,7 @@ import (
 	"github.com/gardener/etcd-backup-restore/pkg/miscellaneous"
 	"github.com/gardener/etcd-backup-restore/pkg/snapshot/restorer"
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
-	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/client/v3"
 
 	"github.com/sirupsen/logrus"
 

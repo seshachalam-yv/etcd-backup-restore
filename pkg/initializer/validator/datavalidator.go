@@ -22,11 +22,11 @@ import (
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/raft/raftpb"
-	"go.etcd.io/etcd/wal"
-	"go.etcd.io/etcd/wal/walpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
+	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
+	"go.etcd.io/etcd/server/v3/wal"
+	"go.etcd.io/etcd/server/v3/wal/walpb"
 	"go.uber.org/zap"
 )
 
@@ -252,7 +252,7 @@ func verifyWALDir(logger *zap.Logger, waldir string, snap walpb.Snapshot) error 
 
 	repaired := false
 	for {
-		if err = wal.Verify(logger, waldir, snap); err != nil {
+		if _, err = wal.Verify(logger, waldir, snap); err != nil {
 			// we can only repair ErrUnexpectedEOF and we never repair twice.
 			if repaired || err != io.ErrUnexpectedEOF {
 				fmt.Printf("read wal error (%v) and cannot be repaired.\n", err)

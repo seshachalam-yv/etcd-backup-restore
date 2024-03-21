@@ -19,7 +19,7 @@ import (
 	"github.com/gardener/etcd-backup-restore/test/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.etcd.io/etcd/pkg/types"
+	"go.etcd.io/etcd/client/pkg/v3/types"
 )
 
 var _ = Describe("Running Compactor", func() {

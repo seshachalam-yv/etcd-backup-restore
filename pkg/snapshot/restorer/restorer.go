@@ -30,10 +30,10 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/etcdutl/v3/snapshot"
 	"go.etcd.io/etcd/pkg/v3/traceutil"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"go.etcd.io/etcd/server/v3/config"
 	"go.etcd.io/etcd/server/v3/embed"
 	"go.etcd.io/etcd/server/v3/etcdserver"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/membership"
@@ -89,6 +89,7 @@ func (r *Restorer) RestoreAndStopEtcd(ro brtypes.RestoreOptions, m member.Contro
 
 // Restore restores the etcd data directory as per specified restore options but returns the ETCD server that it statrted.
 func (r *Restorer) Restore(ro brtypes.RestoreOptions, m member.Control) (*embed.Etcd, error) {
+
 	if err := r.restoreFromBaseSnapshot(ro); err != nil {
 		return nil, fmt.Errorf("failed to restore from the base snapshot: %v", err)
 	}
@@ -146,40 +147,59 @@ func (r *Restorer) Restore(ro brtypes.RestoreOptions, m member.Control) (*embed.
 	return e, nil
 }
 
-// restoreFromBaseSnapshot restore the etcd data directory from base snapshot.
 func (r *Restorer) restoreFromBaseSnapshot(ro brtypes.RestoreOptions) error {
-	var err error
 	if path.Join(ro.BaseSnapshot.SnapDir, ro.BaseSnapshot.SnapName) == "" {
 		r.logger.Warnf("Base snapshot path not provided. Will do nothing.")
 		return nil
 	}
 	r.logger.Infof("Restoring from base snapshot: %s", path.Join(ro.BaseSnapshot.SnapDir, ro.BaseSnapshot.SnapName))
-	cfg := config.ServerConfig{
-		InitialClusterToken: ro.Config.InitialClusterToken,
-		InitialPeerURLsMap:  ro.ClusterURLs,
-		PeerURLs:            ro.PeerURLs,
-		Name:                ro.Config.Name,
-	}
-	if err := cfg.VerifyBootstrap(); err != nil {
-		return err
-	}
 
-	cl, err := membership.NewClusterFromURLsMap(r.zapLogger, ro.Config.InitialClusterToken, ro.ClusterURLs)
+	// Fetch the snapshot from the store
+	s, err := r.store.Fetch(*ro.BaseSnapshot)
+	if err != nil {
+		return fmt.Errorf("failed to fetch base snapshot: %v", err)
+	}
+	defer s.Close()
+
+	// Decompress the snapshot if necessary
+	isCompressed, compressionPolicy, err := compressor.IsSnapshotCompressed(ro.BaseSnapshot.CompressionSuffix)
 	if err != nil {
 		return err
 	}
-
-	memberDir := filepath.Join(ro.Config.DataDir, "member")
-	if _, err := os.Stat(memberDir); err == nil {
-		return fmt.Errorf("member directory in data directory(%q) exists", memberDir)
+	if isCompressed {
+		s, err = compressor.DecompressSnapshot(s, compressionPolicy)
+		if err != nil {
+			return fmt.Errorf("unable to decompress the snapshot: %v", err)
+		}
 	}
 
-	walDir := filepath.Join(memberDir, "wal")
-	snapDir := filepath.Join(memberDir, "snap")
-	if err = r.makeDB(snapDir, ro.BaseSnapshot, len(cl.Members()), ro.Config.SkipHashCheck); err != nil {
-		return err
+	// Create a temporary file to store the fetched snapshot
+	tmpFile, err := os.CreateTemp("", "snapshot-*.db")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file for snapshot: %v", err)
 	}
-	return makeWALAndSnap(r.zapLogger, walDir, snapDir, cl, ro.Config.Name)
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := io.Copy(tmpFile, s); err != nil {
+		return fmt.Errorf("failed to copy snapshot data to temporary file: %v", err)
+	}
+
+	restoreCfg := snapshot.RestoreConfig{
+		SnapshotPath:        tmpFile.Name(),
+		Name:                ro.Config.Name,
+		PeerURLs:            ro.PeerURLs.StringSlice(),
+		InitialCluster:      ro.Config.InitialCluster,
+		InitialClusterToken: ro.Config.InitialClusterToken,
+		OutputDataDir:       ro.Config.DataDir,
+		SkipHashCheck:       ro.Config.SkipHashCheck,
+	}
+
+	sp := snapshot.NewV3(r.zapLogger)
+	if err := sp.Restore(restoreCfg); err != nil {
+		return fmt.Errorf("failed to restore etcd snapshot: %v", err)
+	}
+	r.logger.Infof("Successfully restored from base snapshot: %s", path.Join(ro.BaseSnapshot.SnapDir, ro.BaseSnapshot.SnapName))
+	return nil
 }
 
 var (
@@ -355,7 +375,7 @@ func (r *Restorer) makeDB(snapDir string, snap *brtypes.Snapshot, commit int, sk
 	// having a new raft instance
 	be := backend.NewDefaultBackend(dbPath)
 	// a lessor that never times out leases
-	lessor := lease.NewLessor(r.zapLogger, be, lease.LessorConfig{MinLeaseTTL: math.MaxInt64})
+	lessor := lease.NewLessor(r.zapLogger, be, nil, lease.LessorConfig{MinLeaseTTL: math.MaxInt64})
 	s := mvcc.NewStore(r.zapLogger, be, lessor, mvcc.StoreConfig{})
 	trace := traceutil.New("write", r.zapLogger)
 

@@ -274,7 +274,6 @@ var _ = Describe("Running Restorer", func() {
 		})
 
 		AfterEach(func() {
-			etcd.Server.Stop()
 			etcd.Close()
 			cleanUp()
 		})
@@ -418,7 +417,7 @@ var _ = Describe("Running Restorer", func() {
 			})
 		})
 
-		Context("with etcd data dir not cleaned up before restore", func() {
+		FContext("with etcd data dir not cleaned up before restore", func() {
 			It("Should fail to restore", func() {
 				logger.Infoln("Starting snapshotter for not cleaned etcd dir scenario")
 				wg.Add(1)

@@ -20,7 +20,7 @@ import (
 	brtypes "github.com/gardener/etcd-backup-restore/pkg/types"
 	"github.com/gardener/etcd-backup-restore/pkg/wrappers"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/client/v3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/server/v3/embed"
 )
 
@@ -46,7 +46,7 @@ func StartEmbeddedEtcd(ctx context.Context, etcdDir string, logger *logrus.Entry
 	}
 	cfg.Dir = etcdDir
 	cfg.EnableV2 = false
-	cfg.Debug = false
+	//cfg.Debug = false
 	cfg.GRPCKeepAliveTimeout = 0
 	cfg.SnapshotCount = 10
 	DefaultListenPeerURLs := "http://localhost:" + getPeerPortNo(port)
@@ -69,10 +69,10 @@ func StartEmbeddedEtcd(ctx context.Context, etcdDir string, logger *logrus.Entry
 	if err != nil {
 		return nil, err
 	}
-	cfg.LPUrls = []url.URL{*lpurl}
-	cfg.LCUrls = []url.URL{*lcurl}
-	cfg.APUrls = []url.URL{*apurl}
-	cfg.ACUrls = []url.URL{*acurl}
+	cfg.ListenPeerUrls = []url.URL{*lpurl}
+	cfg.ListenClientUrls = []url.URL{*lcurl}
+	cfg.AdvertisePeerUrls = []url.URL{*apurl}
+	cfg.AdvertiseClientUrls = []url.URL{*acurl}
 	cfg.InitialCluster = cfg.InitialClusterFromName(cfg.Name)
 	cfg.Logger = "zap"
 	cfg.AutoCompactionMode = "periodic"

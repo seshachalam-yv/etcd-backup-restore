@@ -168,10 +168,10 @@ func StartEmbeddedEtcd(logger *logrus.Entry, ro *brtypes.RestoreOptions) (*embed
 	if err != nil {
 		return nil, err
 	}
-	cfg.LPUrls = []url.URL{*lpurl}
-	cfg.LCUrls = []url.URL{*lcurl}
-	cfg.APUrls = []url.URL{*apurl}
-	cfg.ACUrls = []url.URL{*acurl}
+	cfg.ListenPeerUrls = []url.URL{*lpurl}
+	cfg.ListenClientUrls = []url.URL{*lcurl}
+	cfg.AdvertisePeerUrls = []url.URL{*apurl}
+	cfg.AdvertiseClientUrls = []url.URL{*acurl}
 	cfg.InitialCluster = cfg.InitialClusterFromName(cfg.Name)
 	cfg.QuotaBackendBytes = ro.Config.EmbeddedEtcdQuotaBytes
 	cfg.MaxRequestBytes = ro.Config.MaxRequestBytes
@@ -535,7 +535,7 @@ func ParsePeerURL(initialAdvertisePeerURLs, podName string) (string, error) {
 	if len(tokens) < 4 {
 		return "", fmt.Errorf("invalid peer URL : %s", initialAdvertisePeerURLs)
 	}
-	domaiName := fmt.Sprintf("%s.%s.%s", tokens[1], tokens[2], "svc")
+	domaiName := tokens[1]
 	return fmt.Sprintf("%s://%s.%s:%s", tokens[0], podName, domaiName, tokens[3]), nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,6 +35,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -429,14 +432,15 @@ func (h *HTTPHandler) serveConfig(rw http.ResponseWriter, req *http.Request) {
 	config["name"] = podName
 
 	initAdPeerURL := config["initial-advertise-peer-urls"]
-	protocol, svcName, namespace, peerPort, err := parsePeerURL(fmt.Sprint(initAdPeerURL))
+	protocol, svcName, namespace, _, err := parsePeerURL(fmt.Sprint(initAdPeerURL))
 	if err != nil {
 		h.Logger.Warnf("Unable to determine service name, namespace, peer port from advertise peer urls : %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	domaiName := fmt.Sprintf("%s.%s.%s", svcName, namespace, "svc")
-	config["initial-advertise-peer-urls"] = fmt.Sprintf("%s://%s.%s:%s", protocol, podName, domaiName, peerPort)
+	peerUrl, _ := getMemberPeerURL(inputFileName, podName)
+	config["initial-advertise-peer-urls"] = peerUrl
 
 	advClientURL := config["advertise-client-urls"]
 	protocol, svcName, namespace, clientPort, err := parseAdvClientURL(fmt.Sprint(advClientURL))
@@ -462,7 +466,9 @@ func (h *HTTPHandler) serveConfig(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	config["initial-cluster-state"] = state
+	if config["initial-cluster-state"] != miscellaneous.ClusterStateExisting {
+		config["initial-cluster-state"] = state
+	}
 
 	data, err := yaml.Marshal(&config)
 	if err != nil {
@@ -480,6 +486,58 @@ func (h *HTTPHandler) serveConfig(rw http.ResponseWriter, req *http.Request) {
 	http.ServeFile(rw, req, outputFileName)
 
 	h.Logger.Info("Served config for ETCD instance.")
+}
+func getMemberPeerURL(configFile string, podName string) (string, error) {
+
+	// Read the config file into a map
+	config, err := miscellaneous.ReadConfigFileAsMap(configFile)
+	if err != nil {
+		return "", err
+	}
+
+	// Retrieve the initial-advertise-peer-urls from the config
+	initAdPeerURL, ok := config["initial-advertise-peer-urls"].(string)
+	if !ok || initAdPeerURL == "" {
+		return "", errors.New("initial-advertise-peer-urls must be set in etcd config")
+	}
+
+	// Parse the peer URL from the config
+	peerURL, err := miscellaneous.ParsePeerURL(initAdPeerURL, podName)
+	if err != nil {
+		return "", fmt.Errorf("could not parse peer URL from the config file: %v", err)
+	}
+
+	clientSet, err := miscellaneous.GetKubernetesClientSetOrError()
+	if err != nil {
+		return peerURL, nil
+	}
+	// Use clientSet to query for a service with the label initial-advertise-peer-urls
+	serviceList := &corev1.ServiceList{}
+	listOpts := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{"initial-advertise-peer-urls": podName}),
+		Namespace:     os.Getenv("POD_NAMESPACE"),
+	}
+
+	if err := clientSet.List(context.Background(), serviceList, listOpts); err != nil {
+		fmt.Println("Error in listing services", serviceList.String(), listOpts.LabelSelector.String())
+		return peerURL, fmt.Errorf("could not list services with the label initial-advertise-peer-urls=%s: %v", initAdPeerURL, err)
+	}
+
+	if len(serviceList.Items) == 0 {
+		return peerURL, nil
+	}
+
+	// Get the LoadBalancer IP of the service
+	service := serviceList.Items[0]
+	loadBalancerIngress := service.Status.LoadBalancer.Ingress
+
+	if len(loadBalancerIngress) == 0 {
+		return peerURL, nil
+	}
+
+	loadBalancerIP := loadBalancerIngress[0].Hostname
+
+	return fmt.Sprintf("http://%v:2380,%s", loadBalancerIP, peerURL), nil
 }
 
 // GetClusterState returns the Cluster state either `new` or `existing`.

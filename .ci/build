@@ -25,7 +25,6 @@ if [[ -z "${BINARY_PATH}" ]]; then
 else
   export BINARY_PATH="$(${READLINK_BIN} -f "${BINARY_PATH}")/bin"
 fi
-
 VCS="github.com"
 ORGANIZATION="gardener"
 PROJECT="etcd-backup-restore"
@@ -34,6 +33,7 @@ export GO111MODULE=on
 cd "${SOURCE_PATH}"
 
 
+export GOARCH=amd64
 ###############################################################################
 
 VERSION_FILE="$(${READLINK_BIN}  -f "${SOURCE_PATH}/VERSION")"

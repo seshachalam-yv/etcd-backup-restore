@@ -46,8 +46,11 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode, failBelowRevision int6
 	start := time.Now()
 	memberHeartbeatPresent := false
 	ctx := context.Background()
+	var err error
 
 	// Etcd cluster scale-up case
+	// Note: first member of etcd cluster can never be part of scale-up case.
+	// TODO: consider removing this special check for first cluster member when backup-restore can check presence of any member in cluster.
 	if miscellaneous.IsMultiNode(logger) {
 		clientSet, err := miscellaneous.GetKubernetesClientSetOrError()
 		if err != nil {

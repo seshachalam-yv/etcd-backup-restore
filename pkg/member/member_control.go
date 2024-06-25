@@ -131,7 +131,11 @@ func (m *memberControl) AddMemberAsLearner(ctx context.Context) error {
 	memAddCtx, cancel := context.WithTimeout(ctx, EtcdTimeout)
 	defer cancel()
 	start := time.Now()
+<<<<<<< HEAD
 	response, err := cli.MemberAddAsLearner(memAddCtx, memberPeerURLs)
+=======
+	response, err := cli.MemberAddAsLearner(memAddCtx, memberPeerURLs)
+>>>>>>> 0accac6e (Adapt PeerURL config)
 	if err != nil {
 		if errors.Is(err, rpctypes.Error(rpctypes.ErrGRPCPeerURLExist)) || errors.Is(err, rpctypes.Error(rpctypes.ErrGRPCMemberExist)) {
 			m.logger.Infof("Member %s with peer urls %v already part of etcd cluster", m.podName, memberPeerURLs)
@@ -202,6 +206,7 @@ func (m *memberControl) IsMemberInCluster(_ context.Context) (_ bool, err error)
 	return false, nil
 }
 
+//
 // doUpdateMemberPeerAddress updated the peer address of a specified etcd member
 func (m *memberControl) doUpdateMemberPeerAddress(ctx context.Context, cli etcdClient.ClusterCloser, id uint64) error {
 	// Already existing clusters or cluster after restoration have `http://localhost:2380` as the peer address. This needs to explicitly updated to the correct peer address.

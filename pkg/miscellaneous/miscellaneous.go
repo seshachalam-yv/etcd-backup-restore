@@ -606,22 +606,21 @@ func GetMemberClientURLs(configFile string) ([]string, error) {
 
 // IsPeerURLTLSEnabled checks whether all peer URLs are TLS-enabled (i.e., use the "https" scheme).
 func IsPeerURLTLSEnabled() (bool, error) {
-	memberPeerURLs, err := GetMemberPeerURLs(GetConfigFilePath())
-	if err != nil {
-		return false, fmt.Errorf("failed to get initial advertise peer URLs: %w", err)
-	}
+    memberPeerURLs, err := GetMemberPeerURLs(GetConfigFilePath())
+    if err != nil {
+        return false, fmt.Errorf("failed to get initial advertise peer URLs: %w", err)
+    }
+    for _, peerURL := range memberPeerURLs {
+        parsedPeerURL, err := url.Parse(peerURL)
+        if err != nil {
+            return false, fmt.Errorf("failed to parse peer URL %s: %w", peerURL, err)
+        }
+        if parsedPeerURL.Scheme != https {
+            return false, nil
+        }
+    }
 
-	for _, peerURL := range memberPeerURLs {
-		parsedPeerURL, err := url.Parse(peerURL)
-		if err != nil {
-			return false, fmt.Errorf("failed to parse peer URL %s: %w", peerURL, err)
-		}
-		if parsedPeerURL.Scheme != https {
-			return false, nil
-		}
-	}
-
-	return true, nil
+    return true, nil
 }
 
 // GetPrevScheduledSnapTime returns the previous schedule snapshot time.

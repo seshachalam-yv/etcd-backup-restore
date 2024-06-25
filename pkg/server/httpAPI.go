@@ -464,6 +464,7 @@ func (h *HTTPHandler) serveConfig(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	state, err := h.getClusterState(req.Context(), clusterSize, podName, podNS)
 	if err != nil {
 		h.Logger.Warnf("failed to get cluster state %v", err)
@@ -519,7 +520,6 @@ func (h *HTTPHandler) getClusterState(ctx context.Context, clusterSize int, podN
 			return miscellaneous.ClusterStateExisting, nil
 		}
 		return miscellaneous.ClusterStateNew, nil
-
 	}
 
 	return *state, nil

@@ -542,16 +542,16 @@ func ReadConfigFileAsMap(path string) (map[string]interface{}, error) {
 
 // parseAdvertiseURLsConfig reads and parses the config file and returns the advertise-urls config.
 func parseAdvertiseURLsConfig(configFile string) (*advertiseURLsConfig, error) {
-	var advURLsConfig advertiseURLsConfig
-	config, err := os.ReadFile(configFile) // #nosec G304 -- this is a trusted advertise-urls config file.
-	if err != nil {
-		return nil, fmt.Errorf("unable to read etcd config file at path: %s : %w", configFile, err)
-	}
+    var advURLsConfig advertiseURLsConfig
+    config, err := os.ReadFile(configFile) // #nosec G304 -- this is a trusted advertise-urls config file.
+    if err != nil {
+        return nil, fmt.Errorf("unable to read etcd config file at path: %s : %w", configFile, err)
+    }
 
-	if err := yaml.Unmarshal(config, &advURLsConfig); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal etcd config yaml file at path: %s : %w", configFile, err)
-	}
-	return &advURLsConfig, nil
+    if err := yaml.Unmarshal(config, &advURLsConfig); err != nil {
+        return nil, fmt.Errorf("unable to unmarshal etcd config yaml file at path: %s : %w", configFile, err)
+    }
+    return &advURLsConfig, nil
 }
 
 // GetMemberPeerURLs retrieves the initial advertise peer URLs for the etcd member using the POD_NAME environment variable.
@@ -566,17 +566,17 @@ func GetMemberPeerURLs(configFile string) ([]string, error) {
 		return nil, fmt.Errorf("failed to parse advertise URLs config: %w", err)
 	}
 
-	peerURLs, ok := advURLsConfig.InitialAdvertisePeerURLs[memberName]
-	if !ok || len(peerURLs) == 0 {
-		return nil, fmt.Errorf("no peer URLs found for pod %s", memberName)
-	}
+    peerURLs, ok := advURLsConfig.InitialAdvertisePeerURLs[memberName]
+    if !ok || len(peerURLs) == 0 {
+        return nil, fmt.Errorf("no peer URLs found for pod %s", memberName)
+    }
 
-	for _, peerURL := range peerURLs {
-		if _, err := url.Parse(peerURL); err != nil {
-			return nil, fmt.Errorf("invalid peer URL %s: %w", peerURL, err)
-		}
-	}
-	return peerURLs, nil
+    for _, peerURL := range peerURLs {
+        if _, err := url.Parse(peerURL); err != nil {
+            return nil, fmt.Errorf("invalid peer URL %s: %w", peerURL, err)
+        }
+    }
+    return peerURLs, nil
 }
 
 // GetMemberClientURLs retrieves the advertise client URLs for the etcd member using the POD_NAME environment variable.

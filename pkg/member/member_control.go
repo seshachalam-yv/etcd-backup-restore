@@ -131,11 +131,7 @@ func (m *memberControl) AddMemberAsLearner(ctx context.Context) error {
 	memAddCtx, cancel := context.WithTimeout(ctx, EtcdTimeout)
 	defer cancel()
 	start := time.Now()
-<<<<<<< HEAD
 	response, err := cli.MemberAddAsLearner(memAddCtx, memberPeerURLs)
-=======
-	response, err := cli.MemberAddAsLearner(memAddCtx, memberPeerURLs)
->>>>>>> 0accac6e (Adapt PeerURL config)
 	if err != nil {
 		if errors.Is(err, rpctypes.Error(rpctypes.ErrGRPCPeerURLExist)) || errors.Is(err, rpctypes.Error(rpctypes.ErrGRPCMemberExist)) {
 			m.logger.Infof("Member %s with peer urls %v already part of etcd cluster", m.podName, memberPeerURLs)

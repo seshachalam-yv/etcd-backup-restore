@@ -55,6 +55,12 @@ type awsCredentials struct {
 	TrustedCaCert        *string `json:"trustedCaCert,omitempty"`
 }
 
+type tagResult struct {
+	snap      *brtypes.Snapshot
+	tagOuptut *s3.GetObjectTaggingOutput
+	err       error
+}
+
 // SSECredentials to hold fields for server-side encryption in I/O operations
 type SSECredentials struct {
 	sseCustomerAlgorithm string
@@ -518,11 +524,14 @@ func (s *S3SnapStore) List() (brtypes.SnapList, error) {
 	prefix := path.Join(strings.Join(prefixTokens[:len(prefixTokens)-1], "/"))
 
 	var snapList brtypes.SnapList
-	in := &s3.ListObjectsInput{
+	var wg sync.WaitGroup
+	tagResultCh := make(chan tagResult)
+
+	listObjectsInput := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
 		Prefix: aws.String(prefix),
 	}
-	err := s.client.ListObjectsPages(in, func(page *s3.ListObjectsOutput, lastPage bool) bool {
+	err := s.client.ListObjectsV2Pages(listObjectsInput, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 		for _, key := range page.Contents {
 			k := (*key.Key)[len(*page.Prefix):]
 			if strings.Contains(k, backupVersionV1) || strings.Contains(k, backupVersionV2) {
@@ -531,7 +540,8 @@ func (s *S3SnapStore) List() (brtypes.SnapList, error) {
 					// Warning
 					logrus.Warnf("Invalid snapshot found. Ignoring it: %s", k)
 				} else {
-					snapList = append(snapList, snap)
+					wg.Add(1)
+					go s.getTagsOfSnapshots(&wg, s.bucket, *key.Key, snap, tagResultCh)
 				}
 			}
 		}
@@ -541,8 +551,45 @@ func (s *S3SnapStore) List() (brtypes.SnapList, error) {
 		return nil, err
 	}
 
+	// close the resultCh once all calls have been made
+	go func() {
+		wg.Wait()
+		close(tagResultCh)
+	}()
+
+Result:
+	// collect snapshots with their tags
+	for result := range tagResultCh {
+		for _, tag := range result.tagOuptut.TagSet {
+			if *tag.Key == brtypes.ExcludeSnapshotMetadataKey && *tag.Value == "true" {
+				logrus.Infof("Snapshot %s has a tag with key %s and value %s. Skipping snapshot.", result.snap.SnapName, *tag.Key, *tag.Value)
+				continue Result
+			}
+		}
+		if result.err != nil {
+			logrus.Warnf("Error while trying to fetch tags of the snapshot. Not adding it to the snapshot list. Error: %s", err)
+			continue
+		}
+		snapList = append(snapList, result.snap)
+	}
+
 	sort.Sort(snapList)
 	return snapList, nil
+}
+
+// getTagsOfSnapshots fetches the tags of the snapshots
+func (s *S3SnapStore) getTagsOfSnapshots(wg *sync.WaitGroup, bucket, key string, snap *brtypes.Snapshot, resultCh chan<- tagResult) {
+	defer wg.Done()
+	tagInput := &s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}
+	objectTag, err := s.client.GetObjectTagging(tagInput)
+	resultCh <- tagResult{
+		snap:      snap,
+		tagOuptut: objectTag,
+		err:       err,
+	}
 }
 
 // Delete should delete the snapshot file from store

@@ -11,6 +11,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -55,10 +56,11 @@ type awsCredentials struct {
 	TrustedCaCert        *string `json:"trustedCaCert,omitempty"`
 }
 
-type tagResult struct {
-	snap      *brtypes.Snapshot
-	tagOuptut *s3.GetObjectTaggingOutput
-	err       error
+type metadataResult struct {
+	snap            *brtypes.Snapshot
+	tagOuptut       *s3.GetObjectTaggingOutput
+	retentionOutput *s3.GetObjectRetentionOutput
+	err             error
 }
 
 // SSECredentials to hold fields for server-side encryption in I/O operations
@@ -525,7 +527,7 @@ func (s *S3SnapStore) List() (brtypes.SnapList, error) {
 
 	var snapList brtypes.SnapList
 	var wg sync.WaitGroup
-	tagResultCh := make(chan tagResult)
+	metadataResultCh := make(chan metadataResult)
 
 	listObjectsInput := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
@@ -541,7 +543,7 @@ func (s *S3SnapStore) List() (brtypes.SnapList, error) {
 					logrus.Warnf("Invalid snapshot found. Ignoring it: %s", k)
 				} else {
 					wg.Add(1)
-					go s.getTagsOfSnapshots(&wg, s.bucket, *key.Key, snap, tagResultCh)
+					go s.getSnapshotMetadata(&wg, s.bucket, *key.Key, snap, metadataResultCh)
 				}
 			}
 		}
@@ -554,12 +556,12 @@ func (s *S3SnapStore) List() (brtypes.SnapList, error) {
 	// close the resultCh once all calls have been made
 	go func() {
 		wg.Wait()
-		close(tagResultCh)
+		close(metadataResultCh)
 	}()
 
 Result:
 	// collect snapshots with their tags
-	for result := range tagResultCh {
+	for result := range metadataResultCh {
 		for _, tag := range result.tagOuptut.TagSet {
 			if *tag.Key == brtypes.ExcludeSnapshotMetadataKey && *tag.Value == "true" {
 				logrus.Infof("Snapshot %s has a tag with key %s and value %s. Skipping snapshot.", result.snap.SnapName, *tag.Key, *tag.Value)
@@ -567,8 +569,14 @@ Result:
 			}
 		}
 		if result.err != nil {
-			logrus.Warnf("Error while trying to fetch tags of the snapshot. Not adding it to the snapshot list. Error: %s", err)
+			logrus.Warnf("Error while trying to fetch metadata of the snapshot. Not adding it to the snapshot list. Error: %s", err)
 			continue
+		}
+		if result.retentionOutput != nil && result.retentionOutput.Retention != nil {
+			logrus.Info("The retention period is not nil")
+			result.snap.RetentionExpiry = *result.retentionOutput.Retention.RetainUntilDate
+		} else {
+			logrus.Info("The retention period is nil")
 		}
 		snapList = append(snapList, result.snap)
 	}
@@ -577,18 +585,26 @@ Result:
 	return snapList, nil
 }
 
-// getTagsOfSnapshots fetches the tags of the snapshots
-func (s *S3SnapStore) getTagsOfSnapshots(wg *sync.WaitGroup, bucket, key string, snap *brtypes.Snapshot, resultCh chan<- tagResult) {
+// getSnapshotMetadata fetches the tags and the retention period of the snapshots
+func (s *S3SnapStore) getSnapshotMetadata(wg *sync.WaitGroup, bucket, key string, snap *brtypes.Snapshot, metadataResultCh chan<- metadataResult) {
 	defer wg.Done()
+	objectRetentionInput := &s3.GetObjectRetentionInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}
+	objectRetentionOutput, retentionErr := s.client.GetObjectRetention(objectRetentionInput)
+	logrus.Warnf("Error while trying to get the retention: %s", retentionErr)
 	tagInput := &s3.GetObjectTaggingInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	}
-	objectTag, err := s.client.GetObjectTagging(tagInput)
-	resultCh <- tagResult{
-		snap:      snap,
-		tagOuptut: objectTag,
-		err:       err,
+	objectTag, tagErr := s.client.GetObjectTagging(tagInput)
+	logrus.Warnf("Error while trying to get the tag: %s", tagErr)
+	metadataResultCh <- metadataResult{
+		snap:            snap,
+		tagOuptut:       objectTag,
+		retentionOutput: objectRetentionOutput,
+		err:             errors.Join(retentionErr, tagErr),
 	}
 }
 

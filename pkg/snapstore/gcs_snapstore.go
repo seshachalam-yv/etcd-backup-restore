@@ -261,7 +261,7 @@ func (s *GCSSnapStore) componentUploader(wg *sync.WaitGroup, stopCh <-chan struc
 }
 
 // List will return a sorted list with all snapshot files on store, excluding those marked with x-ignore-etcd-snapshot-exclude.
-func (s *GCSSnapStore) List() (brtypes.SnapList, error) {
+func (s *GCSSnapStore) List(includeTagged bool) (brtypes.SnapList, error) {
 	prefixTokens := strings.Split(s.prefix, "/")
 	// Consider the parent of the last element for backward compatibility.
 	prefix := path.Join(strings.Join(prefixTokens[:len(prefixTokens)-1], "/"))
@@ -280,8 +280,8 @@ func (s *GCSSnapStore) List() (brtypes.SnapList, error) {
 			return nil, err
 		}
 
-		// Check if the snapshot should be ignored.
-		if attr.Metadata[brtypes.ExcludeSnapshotMetadataKey] == "true" {
+		// Check if the snapshot should be ignored
+		if !includeTagged && attr.Metadata[brtypes.ExcludeSnapshotMetadataKey] == "true" {
 			logrus.Infof("Ignoring snapshot due to exclude metadata: %s", attr.Name)
 			continue
 		}

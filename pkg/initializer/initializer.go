@@ -68,6 +68,13 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode) error {
 				logger.Errorf("scale-up not detected: %v", err)
 			} else if isScaleup {
 				logger.Info("Etcd cluster scale-up is detected")
+				// Anti-rejoin detection (DEP-07): check if this member was previously removed.
+				// If so, exit with error — the member must not rejoin the cluster.
+				if wasRemoved, err := m.WasMemberPreviouslyRemoved(ctx, e.Config.RestoreOptions.Config.DataDir); err != nil {
+					logger.Warnf("failed to check if member was previously removed: %v", err)
+				} else if wasRemoved {
+					logger.Fatalf("member was previously removed from the cluster via scale-down operation. Refusing to rejoin. Data directory must be cleared before this member can be re-added.")
+				}
 				// Add a learner(non-voting member) to a etcd cluster with retry
 				// If backup-restore is unable to add a learner in a cluster
 				// restart the `initialization` by exiting the backup-restore.

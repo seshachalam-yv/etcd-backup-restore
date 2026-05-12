@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -73,6 +76,10 @@ type Control interface {
 
 	// GetPeerURLs returns the list of current peer URLs of the etcd cluster member.
 	GetPeerURLs(context.Context, etcdClient.ClusterCloser) ([]string, error)
+
+	// WasMemberPreviouslyRemoved checks if this member was previously removed via scale-down
+	// by reading the members_removed bucket from the local etcd boltdb.
+	WasMemberPreviouslyRemoved(ctx context.Context, dataDir string) (bool, error)
 }
 
 // memberControl holds the configuration for the mechanism of adding a new member to the cluster.
@@ -402,4 +409,45 @@ func AddLearnerWithRetry(ctx context.Context, m Control, retrySteps int, dataDir
 		}
 		return nil
 	})
+}
+
+// WasMemberPreviouslyRemoved checks if the current member was previously removed
+// from the cluster via a scale-down operation. It reads the members_removed bucket
+// from the local etcd boltdb file in the data directory. When etcd processes a
+// MemberRemove via raft, it writes the removed member's ID into this bucket on
+// all members including the one being removed.
+func (m *memberControl) WasMemberPreviouslyRemoved(_ context.Context, dataDir string) (bool, error) {
+	m.logger.Info("Checking if member was previously removed from cluster via boltdb")
+
+	dbPath := filepath.Join(dataDir, "member", "snap", "db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		m.logger.Info("No boltdb found at data directory — member was not previously removed")
+		return false, nil
+	}
+
+	db, err := bolt.Open(dbPath, 0400, &bolt.Options{Timeout: 3 * time.Second, ReadOnly: true})
+	if err != nil {
+		return false, fmt.Errorf("failed to open boltdb at %s: %w", dbPath, err)
+	}
+	defer db.Close()
+
+	var removedCount int
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("members_removed"))
+		if b == nil {
+			return nil
+		}
+		removedCount = b.Stats().KeyN
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to read members_removed bucket from boltdb: %w", err)
+	}
+
+	if removedCount > 0 {
+		m.logger.Infof("Found %d entries in members_removed bucket — this member was previously removed via scale-down", removedCount)
+		return true, nil
+	}
+
+	return false, nil
 }

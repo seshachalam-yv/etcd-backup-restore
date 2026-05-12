@@ -457,6 +457,17 @@ func (h *HTTPHandler) serveConfig(rw http.ResponseWriter, req *http.Request) {
 	}
 	config["initial-cluster-state"] = state
 
+	// Detect post-scale-down condition and add force-new-cluster if needed.
+	// After a scale-down (e.g., 3→1), the surviving member's raft state still references
+	// removed members. force-new-cluster resets raft to single-node preserving all data.
+	if dataDir, ok := config["data-dir"].(string); ok {
+		if isPostScaleDown(dataDir, clusterSize, h.Logger) {
+			h.Logger.Info("Adding force-new-cluster=true to etcd config for post-scale-down recovery")
+			config["force-new-cluster"] = true
+			removeForceNewClusterMarker(dataDir, h.Logger)
+		}
+	}
+
 	data, err := yaml.Marshal(&config)
 	if err != nil {
 		h.Logger.Warnf("Unable to marshal data to etcd config yaml file: %v", err)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gardener/etcd-backup-restore/pkg/errors"
@@ -55,27 +56,51 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode) error {
 		}
 
 		m := member.NewMemberControl(e.Config.EtcdConnectionConfig)
+		dataDir := e.Config.RestoreOptions.Config.DataDir
 
-		// check heartbeat of etcd member
-		if memberHeartbeatPresent = m.WasMemberInCluster(ctx, clientSet); memberHeartbeatPresent {
-			logger.Info("member found to be already a part of the cluster")
-			logger.Info("skipping the scale-up check")
-		} else {
-			logger.Info("member heartbeat is not present")
-			logger.Info("backup-restore will start the scale-up check")
-			isScaleup, err := m.IsClusterScaledUp(ctx)
-			if err != nil {
-				logger.Errorf("scale-up not detected: %v", err)
-			} else if isScaleup {
-				logger.Info("Etcd cluster scale-up is detected")
-				// Add a learner(non-voting member) to a etcd cluster with retry
-				// If backup-restore is unable to add a learner in a cluster
-				// restart the `initialization` by exiting the backup-restore.
-				if err := member.AddLearnerWithRetry(ctx, m, addLearnerAttempts, e.Config.RestoreOptions.Config.DataDir); err != nil {
-					logger.Fatalf("unable to add a learner in a cluster: %v", err)
+		// Anti-rejoin detection for ALL members (including pod-0):
+		// If this member was previously removed via scale-down, refuse to start.
+		if wasRemoved, err := m.WasMemberPreviouslyRemoved(ctx, dataDir); err != nil {
+			logger.Warnf("failed to check if member was previously removed: %v", err)
+		} else if wasRemoved {
+			logger.Fatalf("member was previously removed from the cluster via scale-down operation. Refusing to rejoin. Data directory must be cleared before this member can be re-added.")
+		}
+
+		// Scale-up detection determines if this member should join an existing cluster as a learner.
+		// Pod-0 skips this for fresh bootstrap (initial-cluster-state=new) since it IS the first
+		// member. But when joining an existing cluster (initial-cluster-state=existing, i.e.
+		// bootstrapWithExistingCluster), ALL pods including pod-0 must enter this path.
+		podName, err := miscellaneous.GetEnvVarOrError("POD_NAME")
+		if err != nil {
+			logger.Fatalf("Error reading POD_NAME env var : %v", err)
+		}
+
+		configFile := miscellaneous.GetConfigFilePath()
+		config, err := miscellaneous.ReadConfigFileAsMap(configFile)
+		if err != nil {
+			logger.Fatalf("failed to read etcd config file: %v", err)
+		}
+		initialClusterState, _ := config["initial-cluster-state"].(string)
+		isJoiningExistingCluster := initialClusterState == "existing"
+
+		if isJoiningExistingCluster || !strings.HasSuffix(podName, "0") {
+			// check heartbeat of etcd member
+			if memberHeartbeatPresent = m.WasMemberInCluster(ctx, clientSet); memberHeartbeatPresent {
+				logger.Info("member found to be already a part of the cluster")
+				logger.Info("skipping the scale-up check")
+			} else {
+				logger.Info("member heartbeat is not present")
+				logger.Info("backup-restore will start the scale-up check")
+				isScaleup, err := m.IsClusterScaledUp(ctx)
+				if err != nil {
+					logger.Errorf("scale-up not detected: %v", err)
+				} else if isScaleup {
+					logger.Info("Etcd cluster scale-up is detected")
+					if err := member.AddLearnerWithRetry(ctx, m, addLearnerAttempts, dataDir); err != nil {
+						logger.Fatalf("unable to add a learner in a cluster: %v", err)
+					}
+					return nil
 				}
-				// return here after adding learner(non-voting member) as no restoration or validation required.
-				return nil
 			}
 		}
 	}

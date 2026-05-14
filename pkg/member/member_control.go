@@ -8,7 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	utilError "github.com/gardener/etcd-backup-restore/pkg/errors"
@@ -20,6 +23,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -73,6 +77,10 @@ type Control interface {
 
 	// GetPeerURLs returns the list of current peer URLs of the etcd cluster member.
 	GetPeerURLs(context.Context, etcdClient.ClusterCloser) ([]string, error)
+
+	// WasMemberPreviouslyRemoved checks if the current member was previously removed
+	// from the cluster. It reads the members_removed bucket from boltdb.
+	WasMemberPreviouslyRemoved(ctx context.Context, dataDir string) (bool, error)
 }
 
 // memberControl holds the configuration for the mechanism of adding a new member to the cluster.
@@ -409,4 +417,63 @@ func AddLearnerWithRetry(ctx context.Context, m Control, retrySteps int, dataDir
 		}
 		return nil
 	})
+}
+
+// WasMemberPreviouslyRemoved checks if the current member was previously removed
+// from the cluster by reading the members_removed bucket from the local boltdb.
+// It checks if the current member's name is absent from the "members" bucket
+// while the "members_removed" bucket has entries — indicating this specific member
+// was evicted. Simply having entries in members_removed is insufficient because
+// when OTHER members are removed, their IDs are written to members_removed on ALL
+// remaining cluster members.
+func (m *memberControl) WasMemberPreviouslyRemoved(_ context.Context, dataDir string) (bool, error) {
+	dbPath := filepath.Join(dataDir, "member", "snap", "db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	db, err := bolt.Open(dbPath, 0400, &bolt.Options{Timeout: 3 * time.Second, ReadOnly: true})
+	if err != nil {
+		return false, fmt.Errorf("failed to open boltdb at %s: %v", dbPath, err)
+	}
+	defer db.Close()
+
+	var currentMemberInMembers bool
+	var removedCount int
+	err = db.View(func(tx *bolt.Tx) error {
+		membersBucket := tx.Bucket([]byte("members"))
+		removedBucket := tx.Bucket([]byte("members_removed"))
+
+		if membersBucket == nil && removedBucket == nil {
+			return nil
+		}
+
+		// Iterate the members bucket to find if THIS member's name is present.
+		// Keys are hex member IDs, values are JSON with "name" field.
+		if membersBucket != nil {
+			membersBucket.ForEach(func(k, v []byte) error {
+				if strings.Contains(string(v), fmt.Sprintf("\"name\":\"%s\"", m.memberName)) {
+					currentMemberInMembers = true
+				}
+				return nil
+			})
+		}
+
+		if removedBucket != nil {
+			removedCount = removedBucket.Stats().KeyN
+			if removedCount > 0 {
+				m.logger.Infof("Found %d entries in members_removed bucket", removedCount)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to read boltdb buckets: %v", err)
+	}
+
+	if !currentMemberInMembers && removedCount > 0 {
+		m.logger.Infof("Current member %s is not in the members bucket but members_removed has %d entries — this member was previously removed", m.memberName, removedCount)
+		return true, nil
+	}
+	return false, nil
 }

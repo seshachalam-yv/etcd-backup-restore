@@ -59,7 +59,7 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode) error {
 		// Always run the anti-rejoin guard when prior data is present on the PV,
 		// regardless of whether the member lease is still alive. A stale lease
 		// must not bypass the tombstone check.
-		hasData, err := e.Validator.HasPriorData()
+		hasData, err := e.Validator.HasEtcdDirectoryStructure()
 		if err != nil {
 			return fmt.Errorf("cannot determine etcd data directory state, failing closed to prevent unsafe rejoin: %v", err)
 		}

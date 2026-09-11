@@ -23,7 +23,7 @@ If the resolved local member ID is present in `members_removed`, the cluster has
 ```mermaid
 flowchart TD
     Start[backup-restore init, multi-node] --> Data{Data dir has valid structure + valid files}
-    Data -->|No| Fresh[No prior data: skip guard, continue]
+    Data -->|No| Fresh[No etcd dir structure: skip guard, continue]
     Data -->|Yes| Lease{Member lease has ID?}
     Lease -->|Yes| Have[Local member ID]
     Lease -->|No / unavailable| File{member-id file exists?}

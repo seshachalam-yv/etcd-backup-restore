@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gardener/etcd-backup-restore/pkg/member"
@@ -260,8 +261,10 @@ auto-compaction-retention: 30m` + prefixLine
 		}
 
 		BeforeEach(func() {
-			dataDir, err = os.MkdirTemp("", "was-removed-")
+			root, err := os.MkdirTemp("", "was-removed-")
 			Expect(err).NotTo(HaveOccurred())
+			dataDir = filepath.Join(root, "new.etcd")
+			Expect(os.MkdirAll(dataDir, 0700)).To(Succeed())
 		})
 
 		JustBeforeEach(func() {
@@ -269,7 +272,7 @@ auto-compaction-retention: 30m` + prefixLine
 		})
 
 		AfterEach(func() {
-			Expect(os.RemoveAll(dataDir)).To(Succeed())
+			Expect(os.RemoveAll(filepath.Dir(dataDir))).To(Succeed())
 		})
 
 		Context("when the local member ID cannot be resolved (no lease, no file)", func() {

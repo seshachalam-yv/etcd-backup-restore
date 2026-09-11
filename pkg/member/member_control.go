@@ -395,7 +395,7 @@ func (m *memberControl) WasMemberInCluster(ctx context.Context, clientSet client
 
 // WasPermanentlyRemoved checks whether this member was permanently removed from
 // the etcd cluster during a prior scale-in by inspecting the boltdb
-// members_removed tombstone bucket. It resolves the local member ID from the
+// "members_removed" tombstone bucket. It resolves the local member ID from the
 // k8s lease first, falling back to the on-disk member-id file.
 func (m *memberControl) WasPermanentlyRemoved(ctx context.Context, dataDir string, k8sClient client.Client) (bool, error) {
 	logger := m.logger.WithField("actor", "anti-rejoin")

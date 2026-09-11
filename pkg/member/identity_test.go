@@ -77,12 +77,14 @@ var _ = Describe("WriteMemberIDFile", func() {
 	var dataDir string
 
 	BeforeEach(func() {
-		dataDir, err = os.MkdirTemp("", "identity-writefile-")
+		root, err := os.MkdirTemp("", "identity-writefile-")
 		Expect(err).NotTo(HaveOccurred())
+		dataDir = filepath.Join(root, "new.etcd")
+		Expect(os.MkdirAll(dataDir, 0700)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		Expect(os.RemoveAll(dataDir)).To(Succeed())
+		Expect(os.RemoveAll(filepath.Dir(dataDir))).To(Succeed())
 	})
 
 	It("writes the identity string to the member-id file", func() {
@@ -106,7 +108,7 @@ var _ = Describe("WriteMemberIDFile", func() {
 	})
 
 	It("returns an error when the data directory does not exist", func() {
-		err := member.WriteMemberIDFile(filepath.Join(dataDir, "missing-subdir"), "abcdef:c1c1:Member")
+		err := member.WriteMemberIDFile(filepath.Join(dataDir, "missing-subdir", "new.etcd"), "abcdef:c1c1:Member")
 		Expect(err).To(HaveOccurred())
 	})
 })
@@ -118,12 +120,14 @@ var _ = Describe("ReadLocalMemberIDFromFile", func() {
 	)
 
 	BeforeEach(func() {
-		dataDir, err = os.MkdirTemp("", "identity-readfile-")
+		root, err := os.MkdirTemp("", "identity-readfile-")
 		Expect(err).NotTo(HaveOccurred())
+		dataDir = filepath.Join(root, "new.etcd")
+		Expect(os.MkdirAll(dataDir, 0700)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		Expect(os.RemoveAll(dataDir)).To(Succeed())
+		Expect(os.RemoveAll(filepath.Dir(dataDir))).To(Succeed())
 	})
 
 	Context("when the member-id file does not exist", func() {
@@ -255,12 +259,14 @@ var _ = Describe("ResolveLocalMemberID", func() {
 	}
 
 	BeforeEach(func() {
-		dataDir, err = os.MkdirTemp("", "identity-resolve-")
+		root, err := os.MkdirTemp("", "identity-resolve-")
 		Expect(err).NotTo(HaveOccurred())
+		dataDir = filepath.Join(root, "new.etcd")
+		Expect(os.MkdirAll(dataDir, 0700)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		Expect(os.RemoveAll(dataDir)).To(Succeed())
+		Expect(os.RemoveAll(filepath.Dir(dataDir))).To(Succeed())
 	})
 
 	Context("when the lease holds a valid identity", func() {

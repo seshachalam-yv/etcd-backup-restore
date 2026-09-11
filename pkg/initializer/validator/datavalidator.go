@@ -124,7 +124,7 @@ func (d *DataValidator) sanityCheck() (DataDirStatus, error) {
 	}
 
 	d.Logger.Info("Checking for data directory structure validity...")
-	etcdDirStructValid, err := d.hasEtcdDirectoryStructure()
+	etcdDirStructValid, err := d.HasEtcdDirectoryStructure()
 	if err != nil {
 		return DataDirectoryStatusUnknown, err
 	}
@@ -220,7 +220,9 @@ func (d *DataValidator) checkForDataCorruption() error {
 	return nil
 }
 
-func (d *DataValidator) hasEtcdDirectoryStructure() (bool, error) {
+// HasEtcdDirectoryStructure reports whether the data directory contains an etcd member tree
+// (member/, wal/, snap/ sub-directories).
+func (d *DataValidator) HasEtcdDirectoryStructure() (bool, error) {
 	var memberExist, snapExist, walExist bool
 	var err error
 	if memberExist, err = directoryExist(d.memberDir()); err != nil {
@@ -233,13 +235,6 @@ func (d *DataValidator) hasEtcdDirectoryStructure() (bool, error) {
 		return false, err
 	}
 	return memberExist && snapExist && walExist, nil
-}
-
-// HasPriorData reports whether the data directory contains an etcd member tree
-// (member/, wal/, snap/ sub-directories), indicating this PV was previously used
-// by a running etcd member.
-func (d *DataValidator) HasPriorData() (bool, error) {
-	return d.hasEtcdDirectoryStructure()
 }
 
 func directoryExist(dir string) (bool, error) {

@@ -4,7 +4,9 @@
 
 package etcdutil
 
-import "path/filepath"
+import (
+	"path/filepath"
+)
 
 const (
 	// MemberIDFileName is the name of the file that persist the etcd cluster member identity on the PV.
@@ -24,4 +26,6 @@ func SnapDir(dataDir string) string { return filepath.Join(MemberDir(dataDir), "
 func BackendDBPath(dataDir string) string { return filepath.Join(SnapDir(dataDir), "db") }
 
 // MemberIDFilePath returns the path of the member-id file for the given data directory.
-func MemberIDFilePath(dataDir string) string { return filepath.Join(dataDir, MemberIDFileName) }
+func MemberIDFilePath(dataDir string) string {
+	return filepath.Join(filepath.Dir(dataDir), MemberIDFileName)
+}

@@ -364,7 +364,9 @@ var _ = Describe("Heartbeat", func() {
 			})
 
 			It("Should write member-id file when dataDir is set", func() {
-				dataDir := GinkgoT().TempDir()
+				root := GinkgoT().TempDir()
+				dataDir := filepath.Join(root, "new.etcd")
+				Expect(os.MkdirAll(dataDir, 0700)).To(Succeed())
 				clientSet := miscellaneous.GetFakeKubernetesClientSet()
 				hb, err := heartbeat.NewHeartbeat(logger, etcdConnectionConfig, clientSet, metadata, dataDir)
 				Expect(err).ShouldNot(HaveOccurred())
